@@ -6,4 +6,4 @@ sqlalchemy
 psycopg2-binary
 pytest>=6.0.0
 tweepy==4.0.0
-
+emoji
