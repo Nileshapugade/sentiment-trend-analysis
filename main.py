@@ -1,7 +1,7 @@
 from fastapi import FastAPI, Depends, BackgroundTasks, WebSocket
 from sqlalchemy.orm import Session
 from models import RawTweet
-from database import get_tweets_by_column, get_db
+from database import get_tweets_by_column, get_db  # Import get_db from database
 from datetime import datetime
 import tweepy
 import re
@@ -17,10 +17,10 @@ nltk.download('stopwords')
 # FastAPI app setup
 app = FastAPI()
 
-# Database setup
-DATABASE_URL = "postgresql://postgres:1111@db:5432/sentiment_db"
-engine = create_engine(DATABASE_URL)
-SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+# Database setup (already handled in database.py, so this can be removed)
+# DATABASE_URL = "postgresql://postgres:1111@db:5432/sentiment_db"
+# engine = create_engine(DATABASE_URL)
+# SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 # Load sentiment-analysis model from Hugging Face
 sentiment_analyzer = pipeline("sentiment-analysis")
