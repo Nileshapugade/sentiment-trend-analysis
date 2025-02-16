@@ -1,7 +1,7 @@
 from fastapi import FastAPI, Depends, BackgroundTasks, WebSocket
-from sqlalchemy.orm import Session, sessionmaker
+from sqlalchemy.orm import Session
 from models import RawTweet
-from database import get_tweets_by_column
+from database import get_tweets_by_column, get_db
 from datetime import datetime
 import tweepy
 import re
@@ -18,7 +18,7 @@ nltk.download('stopwords')
 app = FastAPI()
 
 # Database setup
-DATABASE_URL = "postgresql://postgres:1111@localhost:5432/sentiment_db"
+DATABASE_URL = "postgresql://postgres:1111@db:5432/sentiment_db"
 engine = create_engine(DATABASE_URL)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
@@ -61,18 +61,25 @@ def fetch_and_analyze_tweets(query: str, db: Session):
             db.commit()
     except tweepy.TweepError as e:
         print(f"Twitter API error: {e}")
+    except Exception as e:
+        print(f"An error occurred: {e}")
 
 # FastAPI route to trigger live sentiment analysis
 @app.post("/analyze_twitter_data/")
-async def analyze_twitter_data(query: str, background_tasks: BackgroundTasks, db: Session = Depends(SessionLocal)):
+async def analyze_twitter_data(query: str, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
     background_tasks.add_task(fetch_and_analyze_tweets, query, db)
     return {"message": "Tweets are being analyzed in the background"}
 
 # FastAPI route to fetch filtered tweets
 @app.get("/filtered_tweets/")
-async def get_filtered_tweets(column_name: str, value: str, db: Session = Depends(SessionLocal)):
+async def get_filtered_tweets(column_name: str, value: str, db: Session = Depends(get_db)):
     tweets = get_tweets_by_column(db, column_name, value)
     return {"tweets": [{"text": tweet.text, "sentiment": tweet.sentiment} for tweet in tweets]}
+
+# FastAPI root route
+@app.get("/")
+async def read_root():
+    return {"message": "Welcome to the FastAPI application"}
 
 # WebSocket endpoint for real-time updates
 @app.websocket("/ws")
