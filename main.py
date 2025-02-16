@@ -1,7 +1,7 @@
-from fastapi import FastAPI, Depends, BackgroundTasks
-from sqlalchemy.orm import Session
-from models import RawTweet  # Import the RawTweet model
-from database import get_tweets_by_column  # Import the database function
+from fastapi import FastAPI, Depends, BackgroundTasks, WebSocket
+from sqlalchemy.orm import Session, sessionmaker
+from models import RawTweet
+from database import get_tweets_by_column
 from datetime import datetime
 import tweepy
 import re
@@ -9,13 +9,16 @@ import emoji
 from nltk.corpus import stopwords
 from transformers import pipeline
 from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
+import nltk
+
+# Download NLTK stopwords
+nltk.download('stopwords')
 
 # FastAPI app setup
 app = FastAPI()
 
 # Database setup
-DATABASE_URL = "postgresql://postgres:1111@localhost:5432/sentiment_db"  # Replace with your credentials
+DATABASE_URL = "postgresql://postgres:1111@localhost:5432/sentiment_db"
 engine = create_engine(DATABASE_URL)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
@@ -38,24 +41,26 @@ def preprocess_text(text: str):
 
 # Function to analyze tweets in the background
 def fetch_and_analyze_tweets(query: str, db: Session):
-    tweets = api.search_tweets(q=query, lang="en", count=10)
-    for tweet in tweets:
-        processed_text = preprocess_text(tweet.text)
-        sentiment_result = sentiment_analyzer(processed_text)
-        sentiment = sentiment_result[0]['label']
-        confidence = sentiment_result[0]['score']
+    try:
+        tweets = api.search_tweets(q=query, lang="en", count=10)
+        for tweet in tweets:
+            processed_text = preprocess_text(tweet.text)
+            sentiment_result = sentiment_analyzer(processed_text)
+            sentiment = sentiment_result[0]['label']
+            confidence = sentiment_result[0]['score']
 
-
-        # Store in DB
-        tweet_entry = RawTweet(
-            tweet_id=tweet.id_str,
-            text=tweet.text,
-            sentiment=sentiment,
-            confidence=confidence,
-            created_at=datetime.utcnow()
-        )
-        db.add(tweet_entry)
-        db.commit()
+            # Store in DB
+            tweet_entry = RawTweet(
+                tweet_id=tweet.id_str,
+                text=tweet.text,
+                sentiment=sentiment,
+                confidence=confidence,
+                created_at=datetime.utcnow()
+            )
+            db.add(tweet_entry)
+            db.commit()
+    except tweepy.TweepError as e:
+        print(f"Twitter API error: {e}")
 
 # FastAPI route to trigger live sentiment analysis
 @app.post("/analyze_twitter_data/")
@@ -68,3 +73,11 @@ async def analyze_twitter_data(query: str, background_tasks: BackgroundTasks, db
 async def get_filtered_tweets(column_name: str, value: str, db: Session = Depends(SessionLocal)):
     tweets = get_tweets_by_column(db, column_name, value)
     return {"tweets": [{"text": tweet.text, "sentiment": tweet.sentiment} for tweet in tweets]}
+
+# WebSocket endpoint for real-time updates
+@app.websocket("/ws")
+async def websocket_endpoint(websocket: WebSocket):
+    await websocket.accept()
+    while True:
+        data = await websocket.receive_text()
+        await websocket.send_json({"message": "New tweet analyzed"})
