@@ -1,15 +1,13 @@
-from fastapi import FastAPI, Depends, HTTPException, BackgroundTasks, WebSocket
-from pydantic import BaseModel
-from sqlalchemy.orm import sessionmaker, Session
-from sqlalchemy import create_engine
+from fastapi import FastAPI, Depends, BackgroundTasks
+from sqlalchemy.orm import Session
+from models import RawTweet  # Import the RawTweet model
+from database import get_tweets_by_column  # Import the database function
+from datetime import datetime
 import tweepy
-import time
 import re
 import emoji
 from nltk.corpus import stopwords
 from transformers import pipeline
-from models import RawTweet, TrendPrediction
-from datetime import datetime
 
 # FastAPI app setup
 app = FastAPI()
@@ -36,27 +34,6 @@ def preprocess_text(text: str):
     text = ' '.join([word for word in text.split() if word.lower() not in stop_words])  # Remove stopwords
     return text.strip()
 
-# WebSocket clients for real-time updates
-active_connections = []
-
-# WebSocket endpoint
-@app.websocket("/ws")
-async def websocket_endpoint(websocket: WebSocket):
-    await websocket.accept()
-    active_connections.append(websocket)
-    try:
-        while True:
-            await websocket.receive_text()
-    except Exception as e:
-        print(f"WebSocket error: {e}")
-    finally:
-        active_connections.remove(websocket)
-
-# Function to send real-time updates
-async def send_realtime_update(data):
-    for connection in active_connections:
-        await connection.send_json(data)
-
 # Function to analyze tweets in the background
 def fetch_and_analyze_tweets(query: str, db: Session):
     tweets = api.search_tweets(q=query, lang="en", count=10)
@@ -77,20 +54,14 @@ def fetch_and_analyze_tweets(query: str, db: Session):
         db.add(tweet_entry)
         db.commit()
 
-        # Send real-time update
-        db.refresh(tweet_entry)
-        send_realtime_update({
-            "tweet": tweet_entry.text,
-            "sentiment": tweet_entry.sentiment,
-            "confidence": tweet_entry.confidence
-        })
-
-# Pydantic model for request body
-class AnalyzeRequest(BaseModel):
-    text: str
-
 # FastAPI route to trigger live sentiment analysis
 @app.post("/analyze_twitter_data/")
-async def analyze_twitter_data(local_kw: str, background_tasks: BackgroundTasks, db: Session = Depends(SessionLocal)):
-    background_tasks.add_task(fetch_and_analyze_tweets, local_kw, db)
+async def analyze_twitter_data(query: str, background_tasks: BackgroundTasks, db: Session = Depends(SessionLocal)):
+    background_tasks.add_task(fetch_and_analyze_tweets, query, db)
     return {"message": "Tweets are being analyzed in the background"}
+
+# FastAPI route to fetch filtered tweets
+@app.get("/filtered_tweets/")
+async def get_filtered_tweets(column_name: str, value: str, db: Session = Depends(SessionLocal)):
+    tweets = get_tweets_by_column(db, column_name, value)
+    return {"tweets": [{"text": tweet.text, "sentiment": tweet.sentiment} for tweet in tweets]}
