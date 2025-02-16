@@ -8,6 +8,7 @@ import re
 import emoji
 from nltk.corpus import stopwords
 from transformers import pipeline
+from sqlalchemy import create_engine
 
 # FastAPI app setup
 app = FastAPI()
