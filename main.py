@@ -9,6 +9,7 @@ import emoji
 from nltk.corpus import stopwords
 from transformers import pipeline
 from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
 
 # FastAPI app setup
 app = FastAPI()
@@ -43,6 +44,7 @@ def fetch_and_analyze_tweets(query: str, db: Session):
         sentiment_result = sentiment_analyzer(processed_text)
         sentiment = sentiment_result[0]['label']
         confidence = sentiment_result[0]['score']
+
 
         # Store in DB
         tweet_entry = RawTweet(
