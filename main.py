@@ -91,6 +91,6 @@ class AnalyzeRequest(BaseModel):
 
 # FastAPI route to trigger live sentiment analysis
 @app.post("/analyze_twitter_data/")
-async def analyze_twitter_data(request: AnalyzeRequest, background_tasks: BackgroundTasks, db: Session = Depends(SessionLocal)):
-    background_tasks.add_task(fetch_and_analyze_tweets, request.text, db)
+async def analyze_twitter_data(local_kw: str, background_tasks: BackgroundTasks, db: Session = Depends(SessionLocal)):
+    background_tasks.add_task(fetch_and_analyze_tweets, local_kw, db)
     return {"message": "Tweets are being analyzed in the background"}
